@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import tempfile
 import time
@@ -13,6 +14,8 @@ import httpx
 from fastapi import HTTPException, UploadFile
 
 from app.config import Settings
+from app.services.hotwords import hotword_string
+from app.services.postprocess import postprocess_text
 
 _AUDIO_SUFFIXES = {
     ".webm",
@@ -95,7 +98,11 @@ def _extract_text(payload: object) -> str:
     raise HTTPException(status_code=502, detail="Xinference 未返回识别文本")
 
 
-async def transcribe_upload(file: UploadFile, settings: Settings) -> dict[str, object]:
+async def transcribe_upload(
+    file: UploadFile,
+    settings: Settings,
+    hotword_override: str = "",
+) -> dict[str, object]:
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="音频内容为空，请重新录音")
@@ -121,12 +128,17 @@ async def transcribe_upload(file: UploadFile, settings: Settings) -> dict[str, o
     if settings.xinference_api_key:
         headers["Authorization"] = f"Bearer {settings.xinference_api_key}"
 
+    hotword = hotword_string(settings.hotwords_dir, hotword_override)
+    form: dict[str, str] = {"model": settings.asr_model, "response_format": "json"}
+    if hotword:
+        form["kwargs"] = json.dumps({"hotword": hotword}, ensure_ascii=False)
+
     try:
         async with httpx.AsyncClient(timeout=settings.asr_timeout_seconds) as client:
             response = await client.post(
                 settings.transcriptions_url,
                 headers=headers,
-                data={"model": settings.asr_model, "response_format": "json"},
+                data=form,
                 files={"file": ("voice.wav", wav_bytes, "audio/wav")},
             )
     except httpx.ConnectError as exc:
@@ -148,10 +160,17 @@ async def transcribe_upload(file: UploadFile, settings: Settings) -> dict[str, o
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="Xinference 返回了无法解析的内容") from exc
 
-    text = _extract_text(payload)
+    raw_text = _extract_text(payload)
+    text = postprocess_text(
+        raw_text,
+        settings.replacements_file,
+        enabled=settings.postprocess_enabled,
+        itn_enabled=settings.itn_enabled,
+    )
     cost_ms = int((time.perf_counter() - started) * 1000)
     return {
         "text": text,
+        "raw_text": raw_text,
         "model": settings.asr_model,
         "duration_ms": duration_ms,
         "cost_ms": cost_ms,

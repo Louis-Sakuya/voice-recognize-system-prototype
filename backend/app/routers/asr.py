@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 
 from app.config import get_settings
 from app.services.asr_service import resolve_ffmpeg, transcribe_upload
+from app.services.hotwords import load_hotwords
 
 router = APIRouter(prefix="/api/v1/asr", tags=["asr"])
 
@@ -21,16 +22,23 @@ async def asr_health() -> dict[str, object]:
         ffmpeg_ok = False
         ffmpeg_bin = settings.ffmpeg_path
         ffmpeg_error = str(getattr(exc, "detail", exc))
+    hotwords = load_hotwords(settings.hotwords_dir)
     return {
         "ok": ffmpeg_ok,
         "ffmpeg": ffmpeg_bin,
         "ffmpeg_error": ffmpeg_error,
         "xinference_url": settings.xinference_url,
         "asr_model": settings.asr_model,
+        "hotword_count": len(hotwords),
+        "postprocess_enabled": settings.postprocess_enabled,
+        "itn_enabled": settings.itn_enabled,
     }
 
 
 @router.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
+async def transcribe(
+    file: UploadFile = File(...),
+    hotword: str = Form(""),
+) -> dict[str, object]:
     settings = get_settings()
-    return await transcribe_upload(file, settings)
+    return await transcribe_upload(file, settings, hotword_override=hotword)

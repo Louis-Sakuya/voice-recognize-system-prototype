@@ -1,6 +1,6 @@
 # 一期 STT 独立原型（A1 · Xinference）
 
-按住说话 → 松手识别 → 文本回填提示词框。本仓库不改现有 AI 平台，接口形状对齐后续接入。
+按住说话 → 松手识别 → 文本回填提示词框，用户再编辑。本仓库不改现有 AI 平台，接口形状对齐后续接入。正式项目接入时：识别文本写入对话输入框供编辑，**禁止识别完自动进 Agent**。
 
 本机是远程 Windows，**不用 Docker**。能选安装位置的运行时、服务和模型，一律装到 `D:\Users\Worker\Program\services`。源码仍在 `D:\Users\Worker\code\voice-rec-system`。
 
@@ -48,11 +48,11 @@ $env:XINFERENCE_ENABLE_VIRTUAL_ENV = "0"
 & D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference-local.exe --host 127.0.0.1 --port 9997
 ```
 
-另开终端启动模型（官方名是小写 `paraformer-zh`）：
+另开终端启动模型（官方名是小写 `seaco-paraformer-zh`，支持热词；旧 `paraformer-zh` 可并存，FastAPI 只打新模型）：
 
 ```powershell
 $env:XINFERENCE_ENDPOINT = "http://127.0.0.1:9997"
-& D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe launch --model-name paraformer-zh --model-type audio
+& D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe launch --model-name seaco-paraformer-zh --model-type audio
 & D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe list
 ```
 
@@ -64,8 +64,12 @@ $env:XINFERENCE_ENDPOINT = "http://127.0.0.1:9997"
 |------|------|--------|------|
 | `XINFERENCE_URL` | 是 | `http://127.0.0.1:9997` | 推理根地址 |
 | `XINFERENCE_API_KEY` | 否 | 空 | 一期鉴权关闭则留空 |
-| `ASR_MODEL` | 是 | `paraformer-zh` | 必须与 `xinference list` 的 uid 一致 |
+| `ASR_MODEL` | 是 | `seaco-paraformer-zh` | 必须与 `xinference list` 的 uid 一致 |
 | `ASR_TIMEOUT_SECONDS` | 否 | `60` | 调用超时 |
+| `ASR_HOTWORDS_DIR` | 否 | `data/hotwords` | 三层热词目录（platform / industry / tenant） |
+| `ASR_REPLACEMENTS_FILE` | 否 | `data/replacements.yaml` | 后处理谐音/大小写映射 |
+| `ASR_POSTPROCESS_ENABLED` | 否 | `1` | 关后处理则原样返回识别文本 |
+| `ASR_ITN_ENABLED` | 否 | `1` | 中文数字串转阿拉伯数字 |
 | `FFMPEG_PATH` | 否 | `D:\Users\Worker\Program\services\ffmpeg\bin\ffmpeg.exe` | ffmpeg 绝对路径 |
 | `APP_HOST` | 否 | `127.0.0.1` | 只绑本机，方便 localhost 录音 |
 | `APP_PORT` | 否 | `8000` | FastAPI 端口 |
@@ -81,12 +85,27 @@ D:\Users\Worker\code\voice-rec-system\.venv\Scripts\python.exe -m uvicorn app.ma
 
 ## 接口
 
-- `GET /api/v1/asr/health`：检查 ffmpeg 与配置
-- `POST /api/v1/asr/transcribe`：`multipart` 字段 `file`，返回 `{ text, model, duration_ms, cost_ms }`
+- `GET /api/v1/asr/health`：检查 ffmpeg、当前模型、热词数量、后处理开关
+- `POST /api/v1/asr/transcribe`：`multipart` 字段 `file`，可选 `hotword`（调试覆盖，演示页和 `VoiceInput.vue` 不传）。返回 `{ text, raw_text, model, duration_ms, cost_ms }`。前端只把 `text` 写入可编辑输入框。
 
-前端可复用组件：`frontend/src/components/VoiceInput.vue`（后续接入平台用，只含按住说话）。演示页是同行为的本地 Vue 单页，不需要再装 Node 构建。
+热词示例（Xinference 侧，本仓库 FastAPI 会自动带上合并后的词表）：
 
-演示页右上角「设置 → 开发者模式」是本仓库内测开关（`localStorage` 键 `voice-rec.devMode`）：开启后可选择本地音频文件，当作录制完成的音频走同一条 STT 回填提示词。**接入 wx-iecm 时不要带设置面板、开发者模式或选文件。**
+```bash
+curl -X POST "http://127.0.0.1:9997/v1/audio/transcriptions" \
+  -F file="@voice.wav" \
+  -F model="seaco-paraformer-zh" \
+  -F "kwargs={\"hotword\":\"RAG API gateway pgvector\"}"
+```
+
+## 热词与后处理
+
+三层词表在 `backend/data/hotwords/`：`platform.txt`（产品/技术词）、`industry.txt`（行业包）、`tenant.txt`（客户名，默认空）。一行一词，`#` 开头为注释。**改文件后不必重启 FastAPI**，下一次转写按 mtime 重载。
+
+后处理规则在 `backend/data/replacements.yaml`（谐音映射、英文大小写），同样按 mtime 重载。
+
+前端可复用组件：`frontend/src/components/VoiceInput.vue`（后续接入平台用，只含按住说话并回填输入框，不含高亮/替换芯片）。演示页是同行为的本地 Vue 单页，不需要再装 Node 构建。
+
+演示页右上角「设置 → 开发者模式」是本仓库内测开关（`localStorage` 键 `voice-rec.devMode`）：开启后可选择本地音频文件，当作录制完成的音频走同一条 STT 回填提示词。**接入 wx-iecm 时不要带设置面板、开发者模式或选文件；识别结果写入输入框后由用户编辑，不要自动发送。**
 
 ## 本机踩坑（已处理）
 

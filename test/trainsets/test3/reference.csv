@@ -1,0 +1,10 @@
+﻿id,grade,filename,reference_text,source,spoken_pronunciation_note
+B01,B,B01.wav,用 RAG 查一下 API gateway 的配置说明。,AI合成分段短间隔(中Xiaoxiao/英Jenny),英文口语: R A G; A P I gateway
+B02,B,B02.wav,请把 pgvector 和 Redis 的连接参数发给我。,AI合成分段短间隔(中Xiaoxiao/英Jenny),英文口语: P G vector; Redis
+B03,B,B03.wav,启动 Xinference 并加载 SenseVoice 模型。,AI合成分段短间隔(中Xiaoxiao/英Jenny),英文口语: X inference; Sense Voice
+B04,B,B04.wav,打开 FastAPI 文档，查看 OpenAI compatible 转写接口。,AI合成分段短间隔(中Xiaoxiao/英Jenny),英文口语: Fast A P I; Open A I compatible
+D01,D,D01.wav,在嘈杂环境下测试 RAG 和 API gateway 识别。,AI合成分段短间隔+噪声,英文口语: R A G; A P I gateway
+D02,D,D02.wav,检查 FastAPI 服务有没有调用 OpenAI compatible 接口。,AI合成分段短间隔+噪声,英文口语: Fast A P I; Open A I compatible
+D03,D,D03.wav,把 Celery 队列里的 ASR 任务全部重试一次。,AI合成分段短间隔+噪声,英文口语: Celery; A S R
+N01,A,N01.wav,欢迎大家来体验达摩院推出的语音识别模型,网络公开示例(阿里云 FunASR 测试音频 asr_example_zh.wav),
+N02,C,N02.wav,欢迎大家来体验达摩院推出的语音识别模型,网络公开示例(同上)+本机叠加房间噪声,

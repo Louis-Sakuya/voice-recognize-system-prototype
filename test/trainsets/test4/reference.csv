@@ -1,0 +1,8 @@
+﻿id,grade,filename,reference_text,source,tts_spoken_text
+B01,B,B01.wav,用 RAG 查一下 API gateway 的配置说明。,AI合成单中文音色(zh-CN-XiaoxiaoNeural); 合成读法见备注,用 rag 查一下 API gateway 的配置说明。
+B02,B,B02.wav,请把 pgvector 和 Redis 的连接参数发给我。,AI合成单中文音色(zh-CN-XiaoxiaoNeural); 合成读法见备注,请把 PG vector 和 Redis 的连接参数发给我。
+B03,B,B03.wav,启动 Xinference 并加载 SenseVoice 模型。,AI合成单中文音色(zh-CN-XiaoxiaoNeural); 合成读法见备注,启动 X inference 并加载 Sense Voice 模型。
+B04,B,B04.wav,打开 FastAPI 文档，查看 OpenAI compatible 转写接口。,AI合成单中文音色(zh-CN-XiaoxiaoNeural); 合成读法见备注,打开 Fast API 文档，查看 OpenAI compatible 转写接口。
+D01,D,D01.wav,在嘈杂环境下测试 RAG 和 API gateway 识别。,AI合成单中文音色(zh-CN-XiaoxiaoNeural)+噪声; 合成读法见备注,在嘈杂环境下测试 RAG 和 API gateway 识别。
+D02,D,D02.wav,检查 FastAPI 服务有没有调用 OpenAI compatible 接口。,AI合成单中文音色(zh-CN-XiaoxiaoNeural)+噪声; 合成读法见备注,检查 Fast API 服务有没有调用 OpenAI compatible 接口。
+D03,D,D03.wav,把 Celery 队列里的 ASR 任务全部重试一次。,AI合成单中文音色(zh-CN-XiaoxiaoNeural)+噪声; 合成读法见备注,把 Celery 队列里的 ASR 任务全部重试一次。

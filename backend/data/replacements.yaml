@@ -1,0 +1,26 @@
+# 后处理映射。改文件后下一次转写生效。
+homophones:
+  - pattern: "热鸡|瑞吉|拉格"
+    replace: "RAG"
+  - pattern: "盖特威"
+    replace: "gateway"
+  - pattern: "皮吉维克特|pg vector|pg-vector|PG Vector"
+    replace: "pgvector"
+  - pattern: "艾克斯因弗伦斯|X Inference"
+    replace: "Xinference"
+  - pattern: "法斯特诶屁爱|fast APR|Fast APR|fast day PI"
+    replace: "Fast API" 
+  - pattern: "salary"
+    replace: "Celery"
+  - pattern: "open ai|open-ai|opener|Openai"
+    replace: "OpenAI"
+  - pattern: "RE ts|redis|re ts|reds"
+    replace: "Redis"
+english_case:
+  RAG: RAG
+  API: API
+  gateway: gateway
+  pgvector: pgvector
+  Xinference: Xinference
+  FunASR: FunASR
+  Paraformer: Paraformer

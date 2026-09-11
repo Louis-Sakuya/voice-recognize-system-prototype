@@ -16,6 +16,17 @@ def _env(name: str, default: str = "") -> str:
     return str(os.getenv(name, default) or "").strip()
 
 
+def _env_flag(name: str, default: str = "1") -> bool:
+    return _env(name, default).lower() not in {"0", "false", "no", "off"}
+
+
+def _resolve_under_backend(raw: str, default_relative: str) -> Path:
+    value = Path(raw or default_relative)
+    if not value.is_absolute():
+        value = BACKEND_DIR / value
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     xinference_url: str
@@ -25,6 +36,10 @@ class Settings:
     ffmpeg_path: str
     app_host: str
     app_port: int
+    hotwords_dir: Path
+    replacements_file: Path
+    postprocess_enabled: bool
+    itn_enabled: bool
 
     @property
     def transcriptions_url(self) -> str:
@@ -45,9 +60,13 @@ def get_settings() -> Settings:
     return Settings(
         xinference_url=_env("XINFERENCE_URL", "http://127.0.0.1:9997"),
         xinference_api_key=_env("XINFERENCE_API_KEY"),
-        asr_model=_env("ASR_MODEL", "paraformer-zh"),
+        asr_model=_env("ASR_MODEL", "seaco-paraformer-zh"),
         asr_timeout_seconds=timeout_seconds,
         ffmpeg_path=_env("FFMPEG_PATH", "ffmpeg"),
         app_host=_env("APP_HOST", "127.0.0.1"),
         app_port=app_port,
+        hotwords_dir=_resolve_under_backend(_env("ASR_HOTWORDS_DIR"), "data/hotwords"),
+        replacements_file=_resolve_under_backend(_env("ASR_REPLACEMENTS_FILE"), "data/replacements.yaml"),
+        postprocess_enabled=_env_flag("ASR_POSTPROCESS_ENABLED", "1"),
+        itn_enabled=_env_flag("ASR_ITN_ENABLED", "1"),
     )

@@ -1,0 +1,13 @@
+﻿id,grade,filename,reference_text,source
+A01,A,A01.wav,打开知识库搜索。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural)
+A02,A,A02.wav,请把会议纪要发送给张经理。,AI合成(Edge TTS zh-CN-YunyangNeural)
+A03,A,A03.wav,查询最近七天的系统告警。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural)
+B01,B,B01.wav,用 RAG 查一下 API gateway 的配置说明。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural)
+B02,B,B02.wav,请把 pgvector 和 Redis 的连接参数发给我。,AI合成(Edge TTS zh-CN-YunxiNeural)
+B03,B,B03.wav,启动 Xinference 并加载 SenseVoice 模型。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural)
+C01,C,C01.wav,今天把合同风险点总结一下。,AI合成(Edge TTS zh-CN-liaoning-XiaobeiNeural)+噪声叠加
+C02,C,C02.wav,帮我看看上季度销售数据对比。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural 语速+噪声)
+C03,C,C03.wav,本地部署的许可证费用怎么算？,AI合成(Edge TTS zh-CN-shaanxi-XiaoniNeural)+噪声叠加
+D01,D,D01.wav,在嘈杂环境下测试 RAG 和 API gateway 识别。,AI合成(Edge TTS zh-CN-XiaoxiaoNeural)+噪声叠加
+D02,D,D02.wav,检查 FastAPI 服务有没有调用 OpenAI compatible 接口。,AI合成(Edge TTS zh-CN-YunjianNeural)+噪声叠加
+D03,D,D03.wav,把 Celery 队列里的 ASR 任务全部重试一次。,AI合成(Edge TTS zh-CN-XiaoyiNeural 语速+噪声)

@@ -9,3 +9,4 @@ __pycache__/
 *.wav
 backend/tests_sample.wav
 downloads/
+测试用文件/

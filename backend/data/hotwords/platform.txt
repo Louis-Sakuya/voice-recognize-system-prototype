@@ -1,0 +1,13 @@
+# 平台通用热词。一行一词，改文件后下一次转写生效。
+RAG
+API
+gateway
+pgvector
+Xinference
+FunASR
+Paraformer
+Celery
+知识库
+提示词
+语音识别
+wx-iecm
