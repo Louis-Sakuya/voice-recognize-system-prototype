@@ -130,7 +130,8 @@ async def transcribe_upload(
 
     hotword = hotword_string(settings.hotwords_dir, hotword_override)
     form: dict[str, str] = {"model": settings.asr_model, "response_format": "json"}
-    if hotword:
+    model_l = settings.asr_model.lower()
+    if hotword and ("paraformer" in model_l or "seaco" in model_l):
         form["kwargs"] = json.dumps({"hotword": hotword}, ensure_ascii=False)
 
     try:

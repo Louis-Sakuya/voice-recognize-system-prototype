@@ -2,5 +2,5 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $cli = Join-Path $root ".venv-xinf\Scripts\xinference.exe"
 $env:XINFERENCE_ENDPOINT = "http://127.0.0.1:9997"
-& $cli launch --model-name seaco-paraformer-zh --model-type audio
+& $cli launch --model-name SenseVoiceSmall --model-type audio
 & $cli list

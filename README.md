@@ -48,13 +48,15 @@ $env:XINFERENCE_ENABLE_VIRTUAL_ENV = "0"
 & D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference-local.exe --host 127.0.0.1 --port 9997
 ```
 
-另开终端启动模型（官方名是小写 `seaco-paraformer-zh`，支持热词；旧 `paraformer-zh` 可并存，FastAPI 只打新模型）：
+另开终端启动模型（官方名是 `SenseVoiceSmall`，大小写敏感。旧 `seaco-paraformer-zh` / `paraformer-zh` 可并存，FastAPI 只打当前 `ASR_MODEL`）：
 
 ```powershell
 $env:XINFERENCE_ENDPOINT = "http://127.0.0.1:9997"
-& D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe launch --model-name seaco-paraformer-zh --model-type audio
+& D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe launch --model-name SenseVoiceSmall --model-type audio
 & D:\Users\Worker\code\voice-rec-system\.venv-xinf\Scripts\xinference.exe list
 ```
+
+首次 launch 会再下一份权重，并可能下载 `fsmn-vad`（需要外网；`XINFERENCE_MODEL_SRC=modelscope`）。离线可事先下好 VAD，加 `--vad_model <本地路径>`。
 
 ### B. 本仓库 FastAPI（`backend/.env`）
 
@@ -64,7 +66,7 @@ $env:XINFERENCE_ENDPOINT = "http://127.0.0.1:9997"
 |------|------|--------|------|
 | `XINFERENCE_URL` | 是 | `http://127.0.0.1:9997` | 推理根地址 |
 | `XINFERENCE_API_KEY` | 否 | 空 | 一期鉴权关闭则留空 |
-| `ASR_MODEL` | 是 | `seaco-paraformer-zh` | 必须与 `xinference list` 的 uid 一致 |
+| `ASR_MODEL` | 是 | `SenseVoiceSmall` | 必须与 `xinference list` 的 uid 一致 |
 | `ASR_TIMEOUT_SECONDS` | 否 | `60` | 调用超时 |
 | `ASR_HOTWORDS_DIR` | 否 | `data/hotwords` | 三层热词目录（platform / industry / tenant） |
 | `ASR_REPLACEMENTS_FILE` | 否 | `data/replacements.yaml` | 后处理谐音/大小写映射 |
@@ -88,18 +90,17 @@ D:\Users\Worker\code\voice-rec-system\.venv\Scripts\python.exe -m uvicorn app.ma
 - `GET /api/v1/asr/health`：检查 ffmpeg、当前模型、热词数量、后处理开关
 - `POST /api/v1/asr/transcribe`：`multipart` 字段 `file`，可选 `hotword`（调试覆盖，演示页和 `VoiceInput.vue` 不传）。返回 `{ text, raw_text, model, duration_ms, cost_ms }`。前端只把 `text` 写入可编辑输入框。
 
-热词示例（Xinference 侧，本仓库 FastAPI 会自动带上合并后的词表）：
+热词示例（仅 Paraformer / seaco 会把 `kwargs.hotword` 传给 Xinference；SenseVoiceSmall 不走该参数，词表仍用于后处理大小写）：
 
 ```bash
 curl -X POST "http://127.0.0.1:9997/v1/audio/transcriptions" \
   -F file="@voice.wav" \
-  -F model="seaco-paraformer-zh" \
-  -F "kwargs={\"hotword\":\"RAG API gateway pgvector\"}"
+  -F model="SenseVoiceSmall"
 ```
 
 ## 热词与后处理
 
-三层词表在 `backend/data/hotwords/`：`platform.txt`（产品/技术词）、`industry.txt`（行业包）、`tenant.txt`（客户名，默认空）。一行一词，`#` 开头为注释。**改文件后不必重启 FastAPI**，下一次转写按 mtime 重载。
+三层词表在 `backend/data/hotwords/`：`platform.txt`（产品/技术词）、`industry.txt`（行业包）、`tenant.txt`（客户名，默认空）。一行一词，`#` 开头为注释。**改文件后不必重启 FastAPI**，下一次转写按 mtime 重载。当前默认模型 `SenseVoiceSmall` 不传推理热词；切回 `seaco-paraformer-zh` 时会自动再传。
 
 后处理规则在 `backend/data/replacements.yaml`（谐音映射、英文大小写），同样按 mtime 重载。
 
@@ -114,3 +115,4 @@ curl -X POST "http://127.0.0.1:9997/v1/audio/transcriptions" \
 - FunASR 会调系统 `ffmpeg`，启动 Xinference 前要把 `D:\Users\Worker\Program\services\ffmpeg\bin` 加进 PATH。
 - Windows 上 Xinference 默认用 `NamedTemporaryFile` 会导致识别 WinError 2，已在 `.venv-xinf` 里改成先落盘再识别。
 - 关掉 `XINFERENCE_ENABLE_VIRTUAL_ENV`，避免再装一份会拉高指令集 NumPy 的模型环境。
+- SenseVoiceSmall 输出可能带 `<|zh|>` 一类标签，后处理会剥掉后再回填输入框。

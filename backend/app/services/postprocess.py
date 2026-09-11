@@ -28,6 +28,7 @@ _CN_DIGITS = {
 _CN_NUMBER_RE = re.compile(r"[零〇一二三四五六七八九]{2,}")
 _EN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
 _MULTI_SPACE_RE = re.compile(r"[ \t]{2,}")
+_SENSEVOICE_TAG_RE = re.compile(r"<\|[^|]+\|>")
 
 
 def _mtime(path: Path) -> float:
@@ -107,9 +108,10 @@ def postprocess_text(
     itn_enabled: bool = True,
 ) -> str:
     if not enabled:
-        return text.strip()
+        return _normalize_spaces(_SENSEVOICE_TAG_RE.sub("", text))
     rules = _load_rules(replacements_file)
-    result = _apply_homophones(text, rules["homophones"])
+    result = _SENSEVOICE_TAG_RE.sub("", text)
+    result = _apply_homophones(result, rules["homophones"])
     result = _apply_english_case(result, rules["english_case"])
     if itn_enabled:
         result = _apply_itn(result)

@@ -60,7 +60,7 @@ def get_settings() -> Settings:
     return Settings(
         xinference_url=_env("XINFERENCE_URL", "http://127.0.0.1:9997"),
         xinference_api_key=_env("XINFERENCE_API_KEY"),
-        asr_model=_env("ASR_MODEL", "seaco-paraformer-zh"),
+        asr_model=_env("ASR_MODEL", "SenseVoiceSmall"),
         asr_timeout_seconds=timeout_seconds,
         ffmpeg_path=_env("FFMPEG_PATH", "ffmpeg"),
         app_host=_env("APP_HOST", "127.0.0.1"),
