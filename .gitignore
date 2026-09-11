@@ -1,0 +1,11 @@
+.venv/
+.venv-xinf/
+__pycache__/
+*.pyc
+.env
+.idea/
+.vscode/
+*.webm
+*.wav
+backend/tests_sample.wav
+downloads/

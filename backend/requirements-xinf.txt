@@ -1,0 +1,9 @@
+# 装到 .venv-xinf，不要和 FastAPI 的 .venv 混用。
+# 本机 CPU 不支持近期 NumPy 的 X86_V2，必须钉住下面版本。
+xinference[transformers]
+torch
+torchaudio
+funasr
+numpy==2.1.3
+scipy==1.14.1
+pandas==2.2.3
