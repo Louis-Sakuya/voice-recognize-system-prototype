@@ -84,7 +84,9 @@ D:\Users\Worker\code\voice-rec-system\.venv\Scripts\python.exe -m uvicorn app.ma
 - `GET /api/v1/asr/health`：检查 ffmpeg 与配置
 - `POST /api/v1/asr/transcribe`：`multipart` 字段 `file`，返回 `{ text, model, duration_ms, cost_ms }`
 
-前端可复用组件：`frontend/src/components/VoiceInput.vue`（后续接入平台用）。演示页是同行为的本地 Vue 单页，不需要再装 Node 构建。
+前端可复用组件：`frontend/src/components/VoiceInput.vue`（后续接入平台用，只含按住说话）。演示页是同行为的本地 Vue 单页，不需要再装 Node 构建。
+
+演示页右上角「设置 → 开发者模式」是本仓库内测开关（`localStorage` 键 `voice-rec.devMode`）：开启后可选择本地音频文件，当作录制完成的音频走同一条 STT 回填提示词。**接入 wx-iecm 时不要带设置面板、开发者模式或选文件。**
 
 ## 本机踩坑（已处理）
 

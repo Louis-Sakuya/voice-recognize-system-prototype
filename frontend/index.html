@@ -21,6 +21,7 @@
       border-radius: 16px;
       box-shadow: 0 8px 24px rgba(0,0,0,.06);
     }
+    .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     h1 { font-size: 20px; margin: 0 0 8px; }
     .hint { color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
     textarea {
@@ -33,7 +34,7 @@
       font: inherit;
       line-height: 1.6;
     }
-    .bar { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+    .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
     button {
       border: 0;
       border-radius: 999px;
@@ -43,14 +44,63 @@
       cursor: pointer;
     }
     button.rec { background: #d4380d; }
+    button.ghost { background: #eef2f7; color: #1a1b1c; }
     button:disabled { opacity: .7; cursor: wait; }
     .status { color: #5b6472; font-size: 13px; }
     .error { color: #c0392b; font-size: 13px; margin-top: 8px; }
+    .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+    .mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 27, 28, .35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 10;
+    }
+    .panel {
+      width: min(420px, 100%);
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px 20px 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.16);
+    }
+    .panel h2 { font-size: 16px; margin: 0 0 8px; }
+    .panel p { margin: 0 0 16px; color: #6b7280; font-size: 13px; line-height: 1.6; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .row span { font-size: 14px; }
+    .switch {
+      position: relative;
+      width: 44px;
+      height: 26px;
+      border-radius: 999px;
+      background: #c5ccd6;
+      border: 0;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+    .switch.on { background: #2f6fed; }
+    .switch i {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left .16s ease;
+    }
+    .switch.on i { left: 21px; }
+    .panel-actions { display: flex; justify-content: flex-end; }
   </style>
 </head>
 <body>
   <div id="app" class="wrap">
-    <h1>语音输入 → 提示词</h1>
+    <div class="head">
+      <h1>语音输入 → 提示词</h1>
+      <button class="ghost" type="button" @click="settingsOpen = true">设置</button>
+    </div>
     <p class="hint">
       必须用 localhost 或 HTTPS 打开才能使用麦克风。按住按钮说话，松开后识别并回填；也可以单击开始、再单击结束。识别结果可编辑。
     </p>
@@ -66,12 +116,42 @@
         @touchend.prevent="stopHold"
         @click.prevent="toggleClick"
       >{{ buttonLabel }}</button>
+      <template v-if="devMode">
+        <button class="ghost" type="button" :disabled="loading || recording" @click="pickAudioFile">选择音频文件</button>
+        <input
+          ref="fileInput"
+          class="file-input"
+          type="file"
+          accept=".wav,.mp3,.m4a,.webm,.ogg,.opus,.flac,.mp4,audio/*"
+          @change="onAudioFile"
+        />
+      </template>
       <span class="status">{{ status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
+    <div v-if="settingsOpen" class="mask" @click.self="settingsOpen = false">
+      <div class="panel" role="dialog" aria-labelledby="settings-title">
+        <h2 id="settings-title">设置</h2>
+        <p>开发者模式仅本机原型内测，不会进入正式平台。</p>
+        <div class="row">
+          <span>开发者模式</span>
+          <button
+            class="switch"
+            :class="{ on: devMode }"
+            type="button"
+            :aria-pressed="devMode ? 'true' : 'false'"
+            @click="toggleDevMode"
+          ><i></i></button>
+        </div>
+        <div class="panel-actions">
+          <button class="ghost" type="button" @click="settingsOpen = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script>
     const { createApp, computed, ref, onBeforeUnmount } = Vue;
+    const DEV_MODE_KEY = "voice-rec.devMode";
     createApp({
       setup() {
         const prompt = ref("");
@@ -80,6 +160,9 @@
         const holdMode = ref(false);
         const status = ref("");
         const error = ref("");
+        const settingsOpen = ref(false);
+        const devMode = ref(localStorage.getItem(DEV_MODE_KEY) === "1");
+        const fileInput = ref(null);
         let mediaStream = null;
         let recorder = null;
         let chunks = [];
@@ -178,12 +261,31 @@
           catch (err) { error.value = normalizeCaptureError(err); cleanupStream(); }
         }
 
-        async function uploadBlob(blob) {
+        function toggleDevMode() {
+          devMode.value = !devMode.value;
+          localStorage.setItem(DEV_MODE_KEY, devMode.value ? "1" : "0");
+        }
+
+        function pickAudioFile() {
+          if (loading.value || recording.value) return;
+          if (fileInput.value) fileInput.value.click();
+        }
+
+        function onAudioFile(event) {
+          const file = event.target.files && event.target.files[0];
+          event.target.value = "";
+          if (!file) return;
+          error.value = "";
+          void uploadBlob(file, `已选择 ${file.name}，正在识别…`);
+        }
+
+        async function uploadBlob(blob, pendingStatus) {
           loading.value = true;
-          status.value = "正在识别…";
+          status.value = pendingStatus || "正在识别…";
           try {
             const form = new FormData();
-            form.append("file", blob, "voice.webm");
+            const filename = blob instanceof File && blob.name ? blob.name : "voice.webm";
+            form.append("file", blob, filename);
             const response = await fetch("/api/v1/asr/transcribe", { method: "POST", body: form });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(payload.detail || "语音识别失败，请重试或手动输入");
@@ -200,7 +302,11 @@
 
         onBeforeUnmount(() => { stopRecording(); cleanupStream(); });
 
-        return { prompt, recording, loading, status, error, buttonLabel, startHold, stopHold, toggleClick };
+        return {
+          prompt, recording, loading, status, error, buttonLabel,
+          settingsOpen, devMode, fileInput,
+          startHold, stopHold, toggleClick, toggleDevMode, pickAudioFile, onAudioFile,
+        };
       },
     }).mount("#app");
   </script>
