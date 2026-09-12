@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 
 from app.config import get_settings
 from app.services.asr_service import resolve_ffmpeg, transcribe_upload
-from app.services.hotwords import load_hotwords
+from app.services.hotwords import layer_counts, load_hotwords
 
 router = APIRouter(prefix="/api/v1/asr", tags=["asr"])
 
@@ -30,6 +30,7 @@ async def asr_health() -> dict[str, object]:
         "xinference_url": settings.xinference_url,
         "asr_model": settings.asr_model,
         "hotword_count": len(hotwords),
+        "hotword_layers": layer_counts(settings.hotwords_dir),
         "postprocess_enabled": settings.postprocess_enabled,
         "itn_enabled": settings.itn_enabled,
     }

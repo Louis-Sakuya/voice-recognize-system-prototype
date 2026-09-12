@@ -1,13 +1,20 @@
 # 平台通用热词。一行一词，改文件后下一次转写生效。
 RAG
 API
+FastAPI
 gateway
 pgvector
+Redis
 Xinference
+SenseVoice
 FunASR
 Paraformer
 Celery
+OpenAI
+ASR
 知识库
 提示词
 语音识别
 wx-iecm
+小信
+网信科技

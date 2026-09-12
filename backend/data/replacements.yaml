@@ -1,5 +1,7 @@
 # 后处理映射。改文件后下一次转写生效。
 homophones:
+  - pattern: "小新"
+    replace: "小信"
   - pattern: "热鸡|瑞吉|拉格"
     replace: "RAG"
   - pattern: "盖特威"
@@ -8,19 +10,25 @@ homophones:
     replace: "pgvector"
   - pattern: "艾克斯因弗伦斯|X Inference"
     replace: "Xinference"
-  - pattern: "法斯特诶屁爱|fast APR|Fast APR|fast day PI"
-    replace: "Fast API" 
-  - pattern: "salary"
-    replace: "Celery"
+  - pattern: "法斯特诶屁爱|fast APR|face API|fast day PI|fast api|fast-api"
+    replace: "FastAPI"
   - pattern: "open ai|open-ai|opener|Openai"
     replace: "OpenAI"
-  - pattern: "RE ts|redis|re ts|reds"
+  - pattern: "RE ts|re ts|reds"
     replace: "Redis"
+  - pattern: "sense voce|sense voice|sensor voice"
+    replace: "SenseVoice"
 english_case:
   RAG: RAG
   API: API
+  FastAPI: FastAPI
   gateway: gateway
   pgvector: pgvector
+  Redis: Redis
   Xinference: Xinference
+  SenseVoice: SenseVoice
   FunASR: FunASR
   Paraformer: Paraformer
+  Celery: Celery
+  OpenAI: OpenAI
+  ASR: ASR

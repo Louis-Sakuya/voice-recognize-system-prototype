@@ -29,6 +29,15 @@ def _read_words(path: Path) -> list[str]:
     return words
 
 
+def load_hotword_layers(hotwords_dir: Path) -> dict[str, list[str]]:
+    """按层返回词表，不合并。"""
+    return {name.removesuffix(".txt"): _read_words(hotwords_dir / name) for name in _LAYER_FILES}
+
+
+def layer_counts(hotwords_dir: Path) -> dict[str, int]:
+    return {name: len(words) for name, words in load_hotword_layers(hotwords_dir).items()}
+
+
 def load_hotwords(hotwords_dir: Path) -> list[str]:
     """合并三层词表，保序去重。文件变更后下次调用自动重载。"""
     global _cache_key, _cache_words

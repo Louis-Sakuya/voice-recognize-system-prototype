@@ -1,0 +1,11 @@
+﻿id,grade,filename,reference_text,source,tts_spoken_text
+R01,C,R01.m4a,喂喂喂，小信你好。,微嘈杂环境下真人说话录音,喂喂喂，小信你好。
+R02,C,R02.m4a,小信你好。,微嘈杂环境下真人说话录音,小信你好。
+R03,D,R03.m4a,小信你好。,高嘈杂环境下真人说话录音,小信你好。
+R04,C,R04.m4a,小信，请用RAG查一下API gateway的配置说明。,微嘈杂环境下真人说话录音,小信，请用RAG查一下API gateway的配置说明。
+R05,C,R05.m4a,请把pgvector和Redis的连接参数发给我。,微嘈杂环境下真人说话录音,请把pgvector和Redis的连接参数发给我。
+R06,C,R06.m4a,启动Xinference并加载SenseVoice模型。,微嘈杂环境下真人说话录音,启动Xinference并加载SenseVoice模型。
+R07,C,R07.m4a,检查FastAPI有没有调用OpenAI compatible接口。,微嘈杂环境下真人说话录音,检查FastAPI有没有调用OpenAI compatible接口。
+R08,C,R08.m4a,把Celery队列里的ASR任务全部重试一次。,微嘈杂环境下真人说话录音,把Celery队列里的ASR任务全部重试一次。
+R09,D,R09.m4a,嗯，哎小信呃，帮我处理一下RAG的记录，小信帮我处理一下FastAPI的一些要求。,高嘈杂环境下真人说话录音+噪声,嗯，哎小信呃，帮我处理一下RAG的记录，小信帮我处理一下FastAPI的一些要求。
+R10,D,R10.m4a,小信帮我处理一下FastAPI的要求。,高嘈杂环境下真人说话录音+噪声,小信帮我处理一下FastAPI的要求。
