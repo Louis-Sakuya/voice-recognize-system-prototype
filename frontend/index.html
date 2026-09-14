@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>一期 STT 原型 · A1 Xinference</title>
+  <title>语音原型 · STT + TTS</title>
   <script src="/static/vendor/vue.global.prod.js"></script>
   <style>
     :root { color-scheme: light; }
@@ -23,10 +23,12 @@
     }
     .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     h1 { font-size: 20px; margin: 0 0 8px; }
+    h2 { font-size: 15px; margin: 0 0 8px; }
     .hint { color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
+    .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e8ebf0; }
     textarea {
       width: 100%;
-      min-height: 160px;
+      min-height: 140px;
       box-sizing: border-box;
       padding: 12px;
       border: 1px solid #d8dce3;
@@ -34,6 +36,7 @@
       font: inherit;
       line-height: 1.6;
     }
+    textarea.reply { min-height: 120px; }
     .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
     button {
       border: 0;
@@ -45,7 +48,7 @@
     }
     button.rec { background: #d4380d; }
     button.ghost { background: #eef2f7; color: #1a1b1c; }
-    button:disabled { opacity: .7; cursor: wait; }
+    button:disabled { opacity: .7; cursor: not-allowed; }
     .status { color: #5b6472; font-size: 13px; }
     .error { color: #c0392b; font-size: 13px; margin-top: 8px; }
     .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
@@ -98,11 +101,11 @@
 <body>
   <div id="app" class="wrap">
     <div class="head">
-      <h1>语音输入 → 提示词</h1>
+      <h1>语音输入 / 平台输出朗读</h1>
       <button class="ghost" type="button" @click="settingsOpen = true">设置</button>
     </div>
     <p class="hint">
-      必须用 localhost 或 HTTPS 打开才能使用麦克风。按住按钮说话，松开后识别并回填；也可以单击开始、再单击结束。识别结果可编辑。
+      必须用 localhost 或 HTTPS 打开才能使用麦克风。按住按钮说话，松开后识别并回填；也可以单击开始、再单击结束。识别结果可编辑。下方「平台输出」用来模拟智能平台回复，点朗读才播放。
     </p>
     <textarea v-model="prompt" placeholder="识别文本会回填到这里"></textarea>
     <div class="bar">
@@ -129,10 +132,34 @@
       <span class="status">{{ status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
+
+    <section class="section">
+      <h2>平台输出（模拟智能平台回复）</h2>
+      <p class="hint">粘贴或手改回复全文，点朗读才合成。接入正式平台时不要自动播放。</p>
+      <textarea
+        class="reply"
+        v-model="reply"
+        placeholder="例如：已为你查询知识库。建议先检查 FastAPI 与 RAG 的配置。"
+      ></textarea>
+      <div class="bar">
+        <button type="button" :disabled="ttsLoading || ttsPlaying || !reply.trim()" @click="speakReply">{{ ttsSpeakLabel }}</button>
+        <button class="ghost" type="button" :disabled="!ttsLoading && !ttsPlaying" @click="stopReply">停止</button>
+        <button
+          v-if="devMode"
+          class="ghost"
+          type="button"
+          :disabled="!lastAudioBlob"
+          @click="saveAudio"
+        >保存音频</button>
+        <span class="status">{{ ttsStatus }}</span>
+      </div>
+      <p v-if="ttsError" class="error">{{ ttsError }}</p>
+    </section>
+
     <div v-if="settingsOpen" class="mask" @click.self="settingsOpen = false">
       <div class="panel" role="dialog" aria-labelledby="settings-title">
         <h2 id="settings-title">设置</h2>
-        <p>开发者模式仅本机原型内测，不会进入正式平台。</p>
+        <p>开发者模式仅本机原型内测，不会进入正式平台。开启后可选择本地音频做 STT，也可保存最近一次 TTS 输出。</p>
         <div class="row">
           <span>开发者模式</span>
           <button
@@ -163,14 +190,29 @@
         const settingsOpen = ref(false);
         const devMode = ref(localStorage.getItem(DEV_MODE_KEY) === "1");
         const fileInput = ref(null);
+        const reply = ref("");
+        const ttsLoading = ref(false);
+        const ttsPlaying = ref(false);
+        const ttsStatus = ref("");
+        const ttsError = ref("");
+        const lastAudioBlob = ref(null);
+        const lastAudioProfile = ref("A");
+        const lastAudioMime = ref("audio/mpeg");
         let mediaStream = null;
         let recorder = null;
         let chunks = [];
+        let ttsPlayer = null;
+        let ttsToken = 0;
 
         const buttonLabel = computed(() => {
           if (loading.value) return "识别中…";
           if (recording.value) return holdMode.value ? "松开结束" : "点击结束";
           return "按住说话 / 点击录音";
+        });
+        const ttsSpeakLabel = computed(() => {
+          if (ttsLoading.value) return "合成中…";
+          if (ttsPlaying.value) return "朗读中…";
+          return "朗读";
         });
 
         function resolveMimeType() {
@@ -300,12 +342,141 @@
           }
         }
 
-        onBeforeUnmount(() => { stopRecording(); cleanupStream(); });
+        function detailFromPayload(payload, status) {
+          const detail = payload && payload.detail;
+          if (typeof detail === "string" && detail.trim()) return detail;
+          if (Array.isArray(detail) && detail[0] && detail[0].msg) return String(detail[0].msg);
+          if (status) return `语音合成失败（HTTP ${status}）`;
+          return "";
+        }
+
+        function stopTtsPlayer() {
+          if (ttsPlayer) {
+            ttsPlayer.onended = null;
+            ttsPlayer.onerror = null;
+            ttsPlayer.pause();
+            ttsPlayer.src = "";
+            ttsPlayer = null;
+          }
+        }
+
+        function stopReply() {
+          ttsToken += 1;
+          ttsLoading.value = false;
+          ttsPlaying.value = false;
+          stopTtsPlayer();
+          if (ttsStatus.value === "合成中…" || ttsStatus.value.startsWith("朗读中") || ttsStatus.value.startsWith("合成中")) {
+            ttsStatus.value = "已停止";
+          }
+        }
+
+        function playBlob(blob) {
+          return new Promise((resolve, reject) => {
+            stopTtsPlayer();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            ttsPlayer = audio;
+            audio.onended = () => {
+              URL.revokeObjectURL(url);
+              if (ttsPlayer === audio) ttsPlayer = null;
+              resolve();
+            };
+            audio.onerror = () => {
+              URL.revokeObjectURL(url);
+              if (ttsPlayer === audio) ttsPlayer = null;
+              reject(new Error("音频播放失败"));
+            };
+            audio.play().catch((err) => {
+              URL.revokeObjectURL(url);
+              if (ttsPlayer === audio) ttsPlayer = null;
+              reject(err instanceof Error ? err : new Error("音频播放失败"));
+            });
+          });
+        }
+
+        async function fetchSpeech(sentence) {
+          const response = await fetch("/api/v1/tts/speech", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: sentence }),
+          });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(detailFromPayload(payload, response.status) || "语音合成失败，请稍后重试");
+          }
+          const blob = await response.blob();
+          if (!blob.size) throw new Error("语音合成为空");
+          return {
+            blob,
+            profile: response.headers.get("X-TTS-Profile") || "",
+            model: response.headers.get("X-TTS-Model") || "",
+            costMs: Number(response.headers.get("X-TTS-Cost-Ms") || 0),
+            mime: blob.type || "audio/mpeg",
+          };
+        }
+
+        async function speakReply() {
+          const source = reply.value.trim();
+          if (!source || ttsLoading.value || ttsPlaying.value) return;
+          const token = ttsToken + 1;
+          ttsToken = token;
+          ttsError.value = "";
+          ttsLoading.value = true;
+          ttsPlaying.value = true;
+          ttsStatus.value = "合成中…";
+          try {
+            const item = await fetchSpeech(source);
+            if (ttsToken !== token) return;
+            lastAudioBlob.value = item.blob;
+            lastAudioProfile.value = item.profile || "A";
+            lastAudioMime.value = item.mime;
+            ttsLoading.value = false;
+            ttsStatus.value = "朗读中…";
+            await playBlob(item.blob);
+            if (ttsToken !== token) return;
+            ttsStatus.value = item.profile ? `朗读完成（${item.profile} · ${item.costMs || 0}ms）` : `朗读完成（${item.costMs || 0}ms）`;
+          } catch (err) {
+            if (ttsToken !== token) return;
+            ttsError.value = err instanceof Error ? err.message : "语音合成失败，请稍后重试";
+            ttsStatus.value = "";
+          } finally {
+            if (ttsToken === token) {
+              ttsLoading.value = false;
+              ttsPlaying.value = false;
+              stopTtsPlayer();
+            }
+          }
+        }
+
+        function saveAudio() {
+          const blob = lastAudioBlob.value;
+          if (!blob) return;
+          const stamp = new Date();
+          const pad = (value) => String(value).padStart(2, "0");
+          const ext = (lastAudioMime.value || "").includes("wav") ? "wav" : "mp3";
+          const name = `tts-${lastAudioProfile.value || "A"}-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.${ext}`;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = name;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        onBeforeUnmount(() => {
+          stopRecording();
+          cleanupStream();
+          stopReply();
+        });
 
         return {
           prompt, recording, loading, status, error, buttonLabel,
           settingsOpen, devMode, fileInput,
+          reply, ttsLoading, ttsPlaying, ttsStatus, ttsError, ttsSpeakLabel, lastAudioBlob,
           startHold, stopHold, toggleClick, toggleDevMode, pickAudioFile, onAudioFile,
+          speakReply, stopReply, saveAudio,
         };
       },
     }).mount("#app");
