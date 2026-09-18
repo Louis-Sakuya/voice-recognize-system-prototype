@@ -152,4 +152,4 @@ curl -X POST "http://127.0.0.1:8000/api/v1/tts/speech" ^
 - 关掉 `XINFERENCE_ENABLE_VIRTUAL_ENV`，避免再装一份会拉高指令集 NumPy 的模型环境。
 - CosyVoice 不在 `xinference[transformers]` 里。`.venv-xinf` 按 `backend/requirements-xinf.txt` 补齐。缺依赖或内存不够时，CLI 仍可能报 100% 并给出 UID，但 `xinference list` 没有 TTS；页面上的「合成超时」多半是模型没真正起来，不是文本太长。
 - 同一 ASR 只保留一份。旧版合并脚本误判「未启动」会再 launch 一次，Xinference 会生成 `seaco-paraformer-zh-随机后缀`。两份 ASR + CosyVoice 很容易把本机打满，加载卡死。
-- 需要优化合成语音速度
+- 需要优化合成语音速度1
