@@ -1,4 +1,8 @@
-"""读取本仓库 FastAPI 使用的环境变量（B 套）。"""
+"""读取本仓库 FastAPI 使用的环境变量。
+
+Phase 1 只依赖云端流式 ASR。旧的 Xinference / TTS 字段仍保留默认值，
+缺省或写错不会阻止进程启动。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,10 @@ from dotenv import load_dotenv
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
 
+ALIYUN_PROVIDER = "aliyun"
+VOLC_PROVIDER = "volcengine"
+VOICE_PROVIDERS = {ALIYUN_PROVIDER, VOLC_PROVIDER}
+
 
 def _env(name: str, default: str = "") -> str:
     return str(os.getenv(name, default) or "").strip()
@@ -18,6 +26,14 @@ def _env(name: str, default: str = "") -> str:
 
 def _env_flag(name: str, default: str = "1") -> bool:
     return _env(name, default).lower() not in {"0", "false", "no", "off"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = _env(name, str(default))
+    try:
+        return int(raw)
+    except ValueError:
+        return default
 
 
 def _resolve_under_backend(raw: str, default_relative: str) -> Path:
@@ -29,13 +45,19 @@ def _resolve_under_backend(raw: str, default_relative: str) -> Path:
 
 @dataclass(frozen=True)
 class Settings:
+    asr_provider: str
+    dashscope_api_key: str
+    aliyun_workspace_id: str
+    aliyun_asr_model: str
+    volc_api_key: str
+    volc_resource_id: str
+    app_host: str
+    app_port: int
     xinference_url: str
     xinference_api_key: str
     asr_model: str
     asr_timeout_seconds: int
     ffmpeg_path: str
-    app_host: str
-    app_port: int
     hotwords_dir: Path
     replacements_file: Path
     postprocess_enabled: bool
@@ -59,42 +81,81 @@ class Settings:
     def models_url(self) -> str:
         return f"{self.xinference_url.rstrip('/')}/v1/models"
 
+    @property
+    def aliyun_ws_url(self) -> str:
+        return f"wss://{self.aliyun_workspace_id}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
+
+    @property
+    def volc_ws_url(self) -> str:
+        return "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+
+    def voice_report(self) -> dict[str, object]:
+        return describe_voice(self)
+
+
+def describe_voice(settings: Settings) -> dict[str, object]:
+    """凭证是否齐备。ready 只表示可以让用户打开语音，不表示已经打开。"""
+    provider = settings.asr_provider
+    if provider not in VOICE_PROVIDERS:
+        return {
+            "ready": False,
+            "provider": provider,
+            "model": "",
+            "reason": "请在 backend/.env 设置 ASR_PROVIDER=aliyun 或 volcengine",
+        }
+    if provider == ALIYUN_PROVIDER:
+        model = settings.aliyun_asr_model or "paraformer-realtime-v2"
+        missing = []
+        if not settings.dashscope_api_key:
+            missing.append("DASHSCOPE_API_KEY")
+        if not settings.aliyun_workspace_id:
+            missing.append("ALIYUN_WORKSPACE_ID")
+        if missing:
+            return {
+                "ready": False,
+                "provider": provider,
+                "model": model,
+                "reason": "缺少 " + "、".join(missing),
+            }
+        return {"ready": True, "provider": provider, "model": model, "reason": ""}
+
+    model = "bigmodel"
+    missing = []
+    if not settings.volc_api_key:
+        missing.append("VOLC_API_KEY")
+    if missing:
+        return {
+            "ready": False,
+            "provider": provider,
+            "model": model,
+            "reason": "缺少 " + "、".join(missing),
+        }
+    return {"ready": True, "provider": provider, "model": model, "reason": ""}
+
 
 def get_settings() -> Settings:
-    timeout_raw = _env("ASR_TIMEOUT_SECONDS", "60")
-    tts_timeout_raw = _env("TTS_TIMEOUT_SECONDS", "180")
-    port_raw = _env("APP_PORT", "8000")
-    tts_profile = _env("TTS_PROFILE", "A").upper()
-    if tts_profile not in {"A", "B"}:
-        raise ValueError("TTS_PROFILE 必须是 A 或 B")
-    try:
-        timeout_seconds = max(1, int(timeout_raw))
-    except ValueError as exc:
-        raise ValueError("ASR_TIMEOUT_SECONDS 必须是正整数") from exc
-    try:
-        tts_timeout_seconds = max(1, int(tts_timeout_raw))
-    except ValueError as exc:
-        raise ValueError("TTS_TIMEOUT_SECONDS 必须是正整数") from exc
-    try:
-        app_port = int(port_raw)
-    except ValueError as exc:
-        raise ValueError("APP_PORT 必须是整数") from exc
     return Settings(
+        asr_provider=_env("ASR_PROVIDER").lower(),
+        dashscope_api_key=_env("DASHSCOPE_API_KEY"),
+        aliyun_workspace_id=_env("ALIYUN_WORKSPACE_ID"),
+        aliyun_asr_model=_env("ALIYUN_ASR_MODEL", "paraformer-realtime-v2"),
+        volc_api_key=_env("VOLC_API_KEY"),
+        volc_resource_id=_env("VOLC_RESOURCE_ID", "volc.bigasr.sauc.duration"),
+        app_host=_env("APP_HOST", "127.0.0.1"),
+        app_port=_env_int("APP_PORT", 8000),
         xinference_url=_env("XINFERENCE_URL", "http://127.0.0.1:9997"),
         xinference_api_key=_env("XINFERENCE_API_KEY"),
         asr_model=_env("ASR_MODEL", "seaco-paraformer-zh"),
-        asr_timeout_seconds=timeout_seconds,
+        asr_timeout_seconds=max(1, _env_int("ASR_TIMEOUT_SECONDS", 60)),
         ffmpeg_path=_env("FFMPEG_PATH", "ffmpeg"),
-        app_host=_env("APP_HOST", "127.0.0.1"),
-        app_port=app_port,
         hotwords_dir=_resolve_under_backend(_env("ASR_HOTWORDS_DIR"), "data/hotwords"),
         replacements_file=_resolve_under_backend(_env("ASR_REPLACEMENTS_FILE"), "data/replacements.yaml"),
         postprocess_enabled=_env_flag("ASR_POSTPROCESS_ENABLED", "1"),
         itn_enabled=_env_flag("ASR_ITN_ENABLED", "1"),
-        tts_profile=tts_profile,
+        tts_profile=_env("TTS_PROFILE", "A").upper() or "A",
         tts_model_a=_env("TTS_MODEL_A", "CosyVoice-300M-SFT"),
         tts_model_b=_env("TTS_MODEL_B", "CosyVoice2-0.5B"),
         tts_voice=_env("TTS_VOICE", "中文女"),
-        tts_timeout_seconds=tts_timeout_seconds,
+        tts_timeout_seconds=max(1, _env_int("TTS_TIMEOUT_SECONDS", 180)),
         tts_readings_file=_resolve_under_backend(_env("TTS_READINGS_FILE"), "data/tts_readings.yaml"),
     )

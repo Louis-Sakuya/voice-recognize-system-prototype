@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>语音原型 · STT + TTS</title>
+  <title>语音实时字幕</title>
   <script src="/static/vendor/vue.global.prod.js"></script>
   <style>
     :root { color-scheme: light; }
@@ -21,23 +21,10 @@
       border-radius: 16px;
       box-shadow: 0 8px 24px rgba(0,0,0,.06);
     }
-    .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     h1 { font-size: 20px; margin: 0 0 8px; }
-    h2 { font-size: 15px; margin: 0 0 8px; }
-    .hint { color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
-    .section { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e8ebf0; }
-    textarea {
-      width: 100%;
-      min-height: 140px;
-      box-sizing: border-box;
-      padding: 12px;
-      border: 1px solid #d8dce3;
-      border-radius: 10px;
-      font: inherit;
-      line-height: 1.6;
-    }
-    textarea.reply { min-height: 120px; }
-    .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    h2 { font-size: 15px; margin: 20px 0 8px; }
+    .hint { color: #6b7280; font-size: 13px; line-height: 1.6; margin: 0 0 16px; }
+    .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
     button {
       border: 0;
       border-radius: 999px;
@@ -46,438 +33,97 @@
       color: #fff;
       cursor: pointer;
     }
-    button.rec { background: #d4380d; }
-    button.ghost { background: #eef2f7; color: #1a1b1c; }
-    button:disabled { opacity: .7; cursor: not-allowed; }
+    button.on { background: #d4380d; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
     .status { color: #5b6472; font-size: 13px; }
-    .error { color: #c0392b; font-size: 13px; margin-top: 8px; }
-    .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
-    .mask {
-      position: fixed;
-      inset: 0;
-      background: rgba(26, 27, 28, .35);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      z-index: 10;
+    .error { color: #c0392b; font-size: 13px; margin: 8px 0 0; }
+    .partial {
+      min-height: 28px;
+      margin: 16px 0 0;
+      padding: 12px;
+      border-radius: 10px;
+      background: #f7f8fb;
+      color: #1a1b1c;
+      line-height: 1.6;
     }
-    .panel {
-      width: min(420px, 100%);
-      background: #fff;
-      border-radius: 16px;
-      padding: 20px 20px 16px;
-      box-shadow: 0 16px 40px rgba(0,0,0,.16);
-    }
-    .panel h2 { font-size: 16px; margin: 0 0 8px; }
-    .panel p { margin: 0 0 16px; color: #6b7280; font-size: 13px; line-height: 1.6; }
-    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .row span { font-size: 14px; }
-    .switch {
-      position: relative;
-      width: 44px;
-      height: 26px;
-      border-radius: 999px;
-      background: #c5ccd6;
-      border: 0;
-      padding: 0;
-      flex: 0 0 auto;
-    }
-    .switch.on { background: #2f6fed; }
-    .switch i {
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      transition: left .16s ease;
-    }
-    .switch.on i { left: 21px; }
-    .panel-actions { display: flex; justify-content: flex-end; }
+    .partial.empty { color: #9aa1ab; }
+    ul { margin: 0; padding-left: 18px; line-height: 1.7; }
+    li + li { margin-top: 4px; }
   </style>
 </head>
 <body>
   <div id="app" class="wrap">
-    <div class="head">
-      <h1>语音输入 / 平台输出朗读</h1>
-      <button class="ghost" type="button" @click="settingsOpen = true">设置</button>
-    </div>
+    <h1>语音实时字幕</h1>
     <p class="hint">
-      必须用 localhost 或 HTTPS 打开才能使用麦克风。按住按钮说话，松开后识别并回填；也可以单击开始、再单击结束。识别结果可编辑。下方「平台输出」用来模拟智能平台回复，点朗读才播放。
+      必须用 localhost 或 HTTPS 打开。页面默认关闭语音，点「开启语音」后才会使用麦克风。说话时中间结果会刷新，停顿后定稿留在下方。
     </p>
-    <textarea v-model="prompt" placeholder="识别文本会回填到这里"></textarea>
     <div class="bar">
       <button
-        :class="{ rec: recording }"
-        :disabled="loading"
-        @mousedown.prevent="startHold"
-        @mouseup.prevent="stopHold"
-        @mouseleave="stopHold"
-        @touchstart.prevent="startHold"
-        @touchend.prevent="stopHold"
-        @click.prevent="toggleClick"
+        type="button"
+        :class="{ on: active }"
+        :disabled="!health.ready && !active && !starting"
+        @click="toggle"
       >{{ buttonLabel }}</button>
-      <template v-if="devMode">
-        <button class="ghost" type="button" :disabled="loading || recording" @click="pickAudioFile">选择音频文件</button>
-        <input
-          ref="fileInput"
-          class="file-input"
-          type="file"
-          accept=".wav,.mp3,.m4a,.webm,.ogg,.opus,.flac,.mp4,audio/*"
-          @change="onAudioFile"
-        />
-      </template>
       <span class="status">{{ status }}</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
-
-    <section class="section">
-      <h2>平台输出（模拟智能平台回复）</h2>
-      <p class="hint">粘贴或手改回复全文，点朗读才合成。接入正式平台时不要自动播放。</p>
-      <textarea
-        class="reply"
-        v-model="reply"
-        placeholder="例如：已为你查询知识库。建议先检查 FastAPI 与 RAG 的配置。"
-      ></textarea>
-      <div class="bar">
-        <button type="button" :disabled="ttsLoading || ttsPlaying || !reply.trim()" @click="speakReply">{{ ttsSpeakLabel }}</button>
-        <button class="ghost" type="button" :disabled="!ttsLoading && !ttsPlaying" @click="stopReply">停止</button>
-        <button
-          v-if="devMode"
-          class="ghost"
-          type="button"
-          :disabled="!lastAudioBlob"
-          @click="saveAudio"
-        >保存音频</button>
-        <span class="status">{{ ttsStatus }}</span>
-      </div>
-      <p v-if="ttsError" class="error">{{ ttsError }}</p>
-    </section>
-
-    <div v-if="settingsOpen" class="mask" @click.self="settingsOpen = false">
-      <div class="panel" role="dialog" aria-labelledby="settings-title">
-        <h2 id="settings-title">设置</h2>
-        <p>开发者模式仅本机原型内测，不会进入正式平台。开启后可选择本地音频做 STT，也可保存最近一次 TTS 输出。</p>
-        <div class="row">
-          <span>开发者模式</span>
-          <button
-            class="switch"
-            :class="{ on: devMode }"
-            type="button"
-            :aria-pressed="devMode ? 'true' : 'false'"
-            @click="toggleDevMode"
-          ><i></i></button>
-        </div>
-        <div class="panel-actions">
-          <button class="ghost" type="button" @click="settingsOpen = false">关闭</button>
-        </div>
-      </div>
-    </div>
+    <p class="partial" :class="{ empty: !partial }">{{ partial || "当前句会显示在这里" }}</p>
+    <h2>已定稿</h2>
+    <p v-if="!finals.length" class="hint">还没有定稿。</p>
+    <ul v-else>
+      <li v-for="(line, index) in finals" :key="index">{{ line }}</li>
+    </ul>
   </div>
-  <script>
-    const { createApp, computed, ref, onBeforeUnmount } = Vue;
-    const DEV_MODE_KEY = "voice-rec.devMode";
+  <script type="module">
+    import { createVoiceSession } from "/static/voice-session.js";
+
+    const { createApp, computed, onBeforeUnmount, onMounted, ref } = Vue;
+
     createApp({
       setup() {
-        const prompt = ref("");
-        const recording = ref(false);
-        const loading = ref(false);
-        const holdMode = ref(false);
+        const health = ref({ ready: false, provider: "", model: "", reason: "正在检查语音服务…" });
+        const active = ref(false);
+        const starting = ref(false);
         const status = ref("");
         const error = ref("");
-        const settingsOpen = ref(false);
-        const devMode = ref(localStorage.getItem(DEV_MODE_KEY) === "1");
-        const fileInput = ref(null);
-        const reply = ref("");
-        const ttsLoading = ref(false);
-        const ttsPlaying = ref(false);
-        const ttsStatus = ref("");
-        const ttsError = ref("");
-        const lastAudioBlob = ref(null);
-        const lastAudioProfile = ref("A");
-        const lastAudioMime = ref("audio/mpeg");
-        let mediaStream = null;
-        let recorder = null;
-        let chunks = [];
-        let ttsPlayer = null;
-        let ttsToken = 0;
+        const partial = ref("");
+        const finals = ref([]);
+        const session = createVoiceSession({
+          onHealth(next) { health.value = next; },
+          onActive(on) {
+            active.value = on;
+            starting.value = false;
+          },
+          onStatus(text) {
+            status.value = text;
+            starting.value = text === "连接中…";
+          },
+          onError(text) { error.value = text; },
+          onPartial(text) { partial.value = text; },
+          onFinal(text) {
+            if (text) finals.value = finals.value.concat(text);
+            partial.value = "";
+          },
+        });
 
         const buttonLabel = computed(() => {
-          if (loading.value) return "识别中…";
-          if (recording.value) return holdMode.value ? "松开结束" : "点击结束";
-          return "按住说话 / 点击录音";
-        });
-        const ttsSpeakLabel = computed(() => {
-          if (ttsLoading.value) return "合成中…";
-          if (ttsPlaying.value) return "朗读中…";
-          return "朗读";
+          if (starting.value) return "连接中…";
+          if (active.value) return "关闭语音";
+          return "开启语音";
         });
 
-        function resolveMimeType() {
-          const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-          if (typeof MediaRecorder === "undefined") return "";
-          return candidates.find((item) => MediaRecorder.isTypeSupported(item)) || "";
+        function toggle() {
+          void session.toggle();
         }
 
-        function cleanupStream() {
-          if (mediaStream) {
-            mediaStream.getTracks().forEach((track) => track.stop());
-            mediaStream = null;
-          }
-          recorder = null;
-        }
-
-        function normalizeCaptureError(err) {
-          const name = err && typeof err === "object" ? String(err.name || "") : "";
-          if (name === "NotAllowedError" || name === "PermissionDeniedError") return "浏览器未授权麦克风，请在地址栏权限中允许录音后重试";
-          if (name === "NotFoundError" || name === "DevicesNotFoundError") return "未检测到可用麦克风设备";
-          if (name === "NotReadableError" || name === "TrackStartError") return "麦克风当前不可用，可能被其他应用占用";
-          if (name === "SecurityError") return "当前页面安全策略禁止录音，请改用 HTTPS 或 localhost 访问";
-          return err instanceof Error ? err.message : "无法开始录音";
-        }
-
-        async function startRecording(isHold) {
-          error.value = "";
-          if (recording.value || loading.value) return;
-          if (!window.isSecureContext) {
-            error.value = "当前页面不是安全上下文，请用 http://localhost 或 HTTPS 打开";
-            return;
-          }
-          if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-            error.value = "当前浏览器不支持录音";
-            return;
-          }
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-          });
-          mediaStream = stream;
-          chunks = [];
-          const mimeType = resolveMimeType();
-          recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-          recorder.ondataavailable = (event) => {
-            if (event.data && event.data.size > 0) chunks.push(event.data);
-          };
-          recorder.onerror = () => {
-            error.value = "语音录制失败，请重试";
-            cleanupStream();
-            recording.value = false;
-          };
-          recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: recorder?.mimeType || mimeType || "audio/webm" });
-            cleanupStream();
-            recording.value = false;
-            holdMode.value = false;
-            if (!blob.size) {
-              error.value = "未录到语音内容";
-              status.value = "";
-              return;
-            }
-            void uploadBlob(blob);
-          };
-          recorder.start();
-          recording.value = true;
-          holdMode.value = isHold;
-          status.value = isHold ? "正在录音，松开结束" : "正在录音，再次点击结束";
-        }
-
-        function stopRecording() {
-          if (recorder && recorder.state === "recording") recorder.stop();
-        }
-
-        async function startHold() {
-          holdMode.value = true;
-          try { await startRecording(true); }
-          catch (err) { error.value = normalizeCaptureError(err); cleanupStream(); }
-        }
-
-        function stopHold() {
-          if (holdMode.value && recording.value) stopRecording();
-        }
-
-        async function toggleClick() {
-          if (holdMode.value) return;
-          if (recording.value) { stopRecording(); return; }
-          try { await startRecording(false); }
-          catch (err) { error.value = normalizeCaptureError(err); cleanupStream(); }
-        }
-
-        function toggleDevMode() {
-          devMode.value = !devMode.value;
-          localStorage.setItem(DEV_MODE_KEY, devMode.value ? "1" : "0");
-        }
-
-        function pickAudioFile() {
-          if (loading.value || recording.value) return;
-          if (fileInput.value) fileInput.value.click();
-        }
-
-        function onAudioFile(event) {
-          const file = event.target.files && event.target.files[0];
-          event.target.value = "";
-          if (!file) return;
-          error.value = "";
-          void uploadBlob(file, `已选择 ${file.name}，正在识别…`);
-        }
-
-        async function uploadBlob(blob, pendingStatus) {
-          loading.value = true;
-          status.value = pendingStatus || "正在识别…";
-          try {
-            const form = new FormData();
-            const filename = blob instanceof File && blob.name ? blob.name : "voice.webm";
-            form.append("file", blob, filename);
-            const response = await fetch("/api/v1/asr/transcribe", { method: "POST", body: form });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(payload.detail || "语音识别失败，请重试或手动输入");
-            const text = String(payload.text || "").trim();
-            prompt.value = text;
-            status.value = text ? `识别完成（${payload.cost_ms || 0}ms）` : "识别完成，但文本为空";
-          } catch (err) {
-            error.value = err instanceof Error ? err.message : "语音识别失败，请重试或手动输入";
-            status.value = "";
-          } finally {
-            loading.value = false;
-          }
-        }
-
-        function detailFromPayload(payload, status) {
-          const detail = payload && payload.detail;
-          if (typeof detail === "string" && detail.trim()) return detail;
-          if (Array.isArray(detail) && detail[0] && detail[0].msg) return String(detail[0].msg);
-          if (status) return `语音合成失败（HTTP ${status}）`;
-          return "";
-        }
-
-        function stopTtsPlayer() {
-          if (ttsPlayer) {
-            ttsPlayer.onended = null;
-            ttsPlayer.onerror = null;
-            ttsPlayer.pause();
-            ttsPlayer.src = "";
-            ttsPlayer = null;
-          }
-        }
-
-        function stopReply() {
-          ttsToken += 1;
-          ttsLoading.value = false;
-          ttsPlaying.value = false;
-          stopTtsPlayer();
-          if (ttsStatus.value === "合成中…" || ttsStatus.value.startsWith("朗读中") || ttsStatus.value.startsWith("合成中")) {
-            ttsStatus.value = "已停止";
-          }
-        }
-
-        function playBlob(blob) {
-          return new Promise((resolve, reject) => {
-            stopTtsPlayer();
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            ttsPlayer = audio;
-            audio.onended = () => {
-              URL.revokeObjectURL(url);
-              if (ttsPlayer === audio) ttsPlayer = null;
-              resolve();
-            };
-            audio.onerror = () => {
-              URL.revokeObjectURL(url);
-              if (ttsPlayer === audio) ttsPlayer = null;
-              reject(new Error("音频播放失败"));
-            };
-            audio.play().catch((err) => {
-              URL.revokeObjectURL(url);
-              if (ttsPlayer === audio) ttsPlayer = null;
-              reject(err instanceof Error ? err : new Error("音频播放失败"));
-            });
-          });
-        }
-
-        async function fetchSpeech(sentence) {
-          const response = await fetch("/api/v1/tts/speech", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: sentence }),
-          });
-          if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(detailFromPayload(payload, response.status) || "语音合成失败，请稍后重试");
-          }
-          const blob = await response.blob();
-          if (!blob.size) throw new Error("语音合成为空");
-          return {
-            blob,
-            profile: response.headers.get("X-TTS-Profile") || "",
-            model: response.headers.get("X-TTS-Model") || "",
-            costMs: Number(response.headers.get("X-TTS-Cost-Ms") || 0),
-            mime: blob.type || "audio/mpeg",
-          };
-        }
-
-        async function speakReply() {
-          const source = reply.value.trim();
-          if (!source || ttsLoading.value || ttsPlaying.value) return;
-          const token = ttsToken + 1;
-          ttsToken = token;
-          ttsError.value = "";
-          ttsLoading.value = true;
-          ttsPlaying.value = true;
-          ttsStatus.value = "合成中…";
-          try {
-            const item = await fetchSpeech(source);
-            if (ttsToken !== token) return;
-            lastAudioBlob.value = item.blob;
-            lastAudioProfile.value = item.profile || "A";
-            lastAudioMime.value = item.mime;
-            ttsLoading.value = false;
-            ttsStatus.value = "朗读中…";
-            await playBlob(item.blob);
-            if (ttsToken !== token) return;
-            ttsStatus.value = item.profile ? `朗读完成（${item.profile} · ${item.costMs || 0}ms）` : `朗读完成（${item.costMs || 0}ms）`;
-          } catch (err) {
-            if (ttsToken !== token) return;
-            ttsError.value = err instanceof Error ? err.message : "语音合成失败，请稍后重试";
-            ttsStatus.value = "";
-          } finally {
-            if (ttsToken === token) {
-              ttsLoading.value = false;
-              ttsPlaying.value = false;
-              stopTtsPlayer();
-            }
-          }
-        }
-
-        function saveAudio() {
-          const blob = lastAudioBlob.value;
-          if (!blob) return;
-          const stamp = new Date();
-          const pad = (value) => String(value).padStart(2, "0");
-          const ext = (lastAudioMime.value || "").includes("wav") ? "wav" : "mp3";
-          const name = `tts-${lastAudioProfile.value || "A"}-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.${ext}`;
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = name;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          URL.revokeObjectURL(url);
-        }
-
+        onMounted(() => {
+          void session.refreshHealth();
+        });
         onBeforeUnmount(() => {
-          stopRecording();
-          cleanupStream();
-          stopReply();
+          void session.stop();
         });
 
-        return {
-          prompt, recording, loading, status, error, buttonLabel,
-          settingsOpen, devMode, fileInput,
-          reply, ttsLoading, ttsPlaying, ttsStatus, ttsError, ttsSpeakLabel, lastAudioBlob,
-          startHold, stopHold, toggleClick, toggleDevMode, pickAudioFile, onAudioFile,
-          speakReply, stopReply, saveAudio,
-        };
+        return { health, active, starting, status, error, partial, finals, buttonLabel, toggle };
       },
     }).mount("#app");
   </script>
