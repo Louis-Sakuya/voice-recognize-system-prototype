@@ -1,4 +1,5 @@
 const SPEECH_RMS = 0.02;
+const SILENCE_FINAL_MS = 2000;
 
 export function createVoiceSession(hooks = {}) {
   const healthUrl = hooks.healthUrl || "/api/v1/voice/health";
@@ -111,7 +112,7 @@ export function createVoiceSession(hooks = {}) {
       emitStatus("正在说话");
     } else if (speaking) {
       silenceMs += 200;
-      if (silenceMs >= 800) {
+      if (silenceMs >= SILENCE_FINAL_MS) {
         speaking = false;
         silenceMs = 0;
         emitStatus("等待说话");

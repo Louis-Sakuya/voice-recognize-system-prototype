@@ -16,12 +16,21 @@
 
 ## 环境
 
-- Python 3.12：`D:\Users\Worker\Program\services\python312`
-- 虚拟环境：`D:\Users\Worker\code\voice-rec-system\.venv`
-- 依赖：`backend/requirements.txt`（含 `websockets`）
+- Python 3.11+（`uv` 会按 `pyproject.toml` 选用或下载）
+- 包管理：`uv`（`uv --version` 能跑即可）
+- 虚拟环境：仓库根目录 `.venv`（`uv sync` 创建）
+- 依赖：`pyproject.toml` / `uv.lock`（`backend/requirements.txt` 仅作对照）
 - 浏览器必须用 `http://localhost:8000` 或 HTTPS，否则没有麦克风权限
 
-复制 `backend/.env.example` 为 `backend/.env`。
+首次在仓库根目录执行：
+
+```powershell
+uv sync
+```
+
+或跑 `scripts/setup.ps1`（内部也是 `uv sync`）。若还没有 `backend/.env`，脚本会从 `backend/.env.example` 复制一份。
+
+复制 `backend/.env.example` 为 `backend/.env` 后填写密钥。
 
 | 变量 | 作用 |
 |------|------|
@@ -31,6 +40,7 @@
 | `ALIYUN_ASR_MODEL` | 默认 `paraformer-realtime-v2` |
 | `VOLC_API_KEY` | 火山引擎新版豆包语音控制台的 API Key |
 | `VOLC_RESOURCE_ID` | 与已开通能力一致，1.0 小时版为 `volc.bigasr.sauc.duration`，2.0 小时版为 `volc.seedasr.sauc.duration` |
+| `ASR_END_WINDOW_MS` | 静音多久后定稿，毫秒。默认 `2000`，范围 500–6000 |
 
 两家都实现了 Adapter。同一页面只换 `ASR_PROVIDER` 并重启，按键和字幕协议不变。
 
@@ -39,8 +49,14 @@
 ## 启动
 
 ```powershell
-cd D:\Users\Worker\code\voice-rec-system\backend
-D:\Users\Worker\code\voice-rec-system\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+powershell -ExecutionPolicy Bypass -File .\scripts\start-api.ps1
+```
+
+没有 `.venv` 时，`start-api.ps1` 会先跑一遍 `setup.ps1`。也可以手动启动：
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 打开 http://localhost:8000 。默认不要麦克风。点「开启语音」后说话，当前句会刷新，停顿后出现在「已定稿」。

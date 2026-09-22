@@ -11,7 +11,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.config import Settings, describe_voice, get_settings
-from app.voice.adapters import volc_auth_headers
+from app.voice.adapters import AliyunAsrAdapter, VolcengineAsrAdapter, volc_auth_headers
 from app.main import app
 from app.voice.events import TranscriptEvent
 from app.voice.protocol import (
@@ -148,6 +148,13 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(headers["X-Api-Key"], "new-key")
         self.assertNotIn("X-Api-App-Key", headers)
         self.assertNotIn("X-Api-Access-Key", headers)
+
+    def test_adapters_use_configured_end_window(self) -> None:
+        settings = _settings(asr_end_window_ms=2000)
+        aliyun = AliyunAsrAdapter(settings)._run_task()
+        volc = VolcengineAsrAdapter(settings)._full_request()
+        self.assertEqual(aliyun["payload"]["parameters"]["max_sentence_silence"], 2000)
+        self.assertEqual(volc["request"]["end_window_size"], 2000)
 
     def test_proxy_error_is_explicit(self) -> None:
         text = humanize_cloud_error(OSError("Failed to connect to 127.0.0.1 port 7890"))

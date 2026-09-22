@@ -144,6 +144,7 @@ class AliyunAsrAdapter(_QueuedAdapter):
                     "format": "pcm",
                     "sample_rate": 16000,
                     "language_hints": ["zh", "en"],
+                    "max_sentence_silence": self._settings.asr_end_window_ms,
                 },
             },
         }
@@ -232,7 +233,7 @@ class VolcengineAsrAdapter(_QueuedAdapter):
                 "enable_punc": True,
                 "enable_nonstream": True,
                 "show_utterances": True,
-                "end_window_size": 800,
+                "end_window_size": self._settings.asr_end_window_ms,
                 "result_type": "full",
             },
         }

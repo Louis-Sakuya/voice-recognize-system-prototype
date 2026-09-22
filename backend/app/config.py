@@ -51,6 +51,7 @@ class Settings:
     aliyun_asr_model: str
     volc_api_key: str
     volc_resource_id: str
+    asr_end_window_ms: int
     app_host: str
     app_port: int
     xinference_url: str
@@ -141,6 +142,7 @@ def get_settings() -> Settings:
         aliyun_asr_model=_env("ALIYUN_ASR_MODEL", "paraformer-realtime-v2"),
         volc_api_key=_env("VOLC_API_KEY"),
         volc_resource_id=_env("VOLC_RESOURCE_ID", "volc.bigasr.sauc.duration"),
+        asr_end_window_ms=min(6000, max(500, _env_int("ASR_END_WINDOW_MS", 2000))),
         app_host=_env("APP_HOST", "127.0.0.1"),
         app_port=_env_int("APP_PORT", 8000),
         xinference_url=_env("XINFERENCE_URL", "http://127.0.0.1:9997"),
