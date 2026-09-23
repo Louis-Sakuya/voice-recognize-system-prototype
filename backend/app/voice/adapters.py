@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
 
-from app.config import Settings
+from app.config import VOLC_RESOURCE_ASR2_DURATION, Settings
 from app.voice.events import TranscriptEvent
 from app.voice.protocol import (
     build_volc_client_frame,
@@ -24,14 +24,19 @@ VOLC_AUDIO_ONLY = 0b0010
 
 
 def volc_auth_headers(settings: Settings, request_id: str) -> dict[str, str]:
-    """新版豆包语音控制台：握手只带 X-Api-Key。"""
-    return {
-        "X-Api-Key": settings.volc_api_key,
-        "X-Api-Resource-Id": settings.volc_resource_id or "volc.bigasr.sauc.duration",
+    """握手头。新版控制台用 X-Api-Key；旧版用 App ID + Access Token。文档 6561/1354869。"""
+    headers = {
+        "X-Api-Resource-Id": settings.volc_resource_id or VOLC_RESOURCE_ASR2_DURATION,
         "X-Api-Request-Id": request_id,
         "X-Api-Connect-Id": request_id,
         "X-Api-Sequence": "-1",
     }
+    if settings.volc_app_id and settings.volc_access_key:
+        headers["X-Api-App-Key"] = settings.volc_app_id
+        headers["X-Api-Access-Key"] = settings.volc_access_key
+        return headers
+    headers["X-Api-Key"] = settings.volc_api_key
+    return headers
 
 
 class AsrAdapter(ABC):
@@ -218,6 +223,19 @@ class VolcengineAsrAdapter(_QueuedAdapter):
         await self._ws.send(build_volc_client_frame(VOLC_AUDIO_ONLY, pcm, last=last))
 
     def _full_request(self) -> dict[str, Any]:
+        resource = self._settings.volc_resource_id or VOLC_RESOURCE_ASR2_DURATION
+        request: dict[str, Any] = {
+            "model_name": "bigmodel",
+            "enable_itn": True,
+            "enable_punc": True,
+            "enable_ddc": True,
+            "enable_nonstream": True,
+            "show_utterances": True,
+            "end_window_size": self._settings.asr_end_window_ms,
+            "result_type": "full",
+        }
+        if "seedasr" in resource:
+            request["ssd_version"] = "200"
         return {
             "user": {"uid": "voice-rec-demo"},
             "audio": {
@@ -227,15 +245,7 @@ class VolcengineAsrAdapter(_QueuedAdapter):
                 "bits": 16,
                 "channel": 1,
             },
-            "request": {
-                "model_name": "bigmodel",
-                "enable_itn": True,
-                "enable_punc": True,
-                "enable_nonstream": True,
-                "show_utterances": True,
-                "end_window_size": self._settings.asr_end_window_ms,
-                "result_type": "full",
-            },
+            "request": request,
         }
 
     async def _read_loop(self) -> None:

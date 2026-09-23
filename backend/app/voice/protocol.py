@@ -138,11 +138,36 @@ def build_volc_client_frame(
     return header + len(body).to_bytes(4, "big") + body
 
 
+def _exception_text(exc: Exception) -> str:
+    parts = [str(exc).strip() or exc.__class__.__name__]
+    response = getattr(exc, "response", None)
+    body = getattr(response, "body", None) if response is not None else None
+    if isinstance(body, (bytes, bytearray)):
+        parts.append(body.decode("utf-8", errors="replace"))
+    elif body:
+        parts.append(str(body))
+    return " ".join(part for part in parts if part)
+
+
 def humanize_cloud_error(exc: Exception) -> str:
-    text = str(exc).strip() or exc.__class__.__name__
+    text = _exception_text(exc)
     lowered = text.lower()
     if "127.0.0.1" in text or "proxy" in lowered:
         return "无法连接云端 ASR：本机代理不可用。请确认代理没有指向未启动的 127.0.0.1。"
+    if "requested resource not granted" in lowered:
+        resource = ""
+        marker = "resource_id="
+        if marker in lowered:
+            start = lowered.index(marker) + len(marker)
+            resource = text[start:].split("]", 1)[0].split()[0].strip("[]\",")
+        suffix = f"（{resource}）" if resource else ""
+        return (
+            f"火山已接受密钥，但未开通当前资源{suffix}。"
+            "请打开 https://console.volcengine.com/speech/new 的「开通管理」，"
+            "保持「大模型」，搜索「流式语音识别」，开通「流式语音识别 2.0」小时版"
+            "（不要只开通 TTS、录音文件识别或 1.0）。"
+            "必须和这把 API Key 在同一个项目。开通后刷新页面即可。"
+        )
     if "401" in text or "403" in text:
         return "云端 ASR 拒绝鉴权，请检查密钥。"
     return f"无法连接云端 ASR：{text}"

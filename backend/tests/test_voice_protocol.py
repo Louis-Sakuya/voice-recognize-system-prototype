@@ -146,8 +146,17 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(ready["model"], "bigmodel")
         headers = volc_auth_headers(_settings(volc_api_key="new-key", volc_resource_id="volc.seedasr.sauc.duration"), "req-1")
         self.assertEqual(headers["X-Api-Key"], "new-key")
+        self.assertEqual(headers["X-Api-Resource-Id"], "volc.seedasr.sauc.duration")
+        self.assertEqual(headers["X-Api-Sequence"], "-1")
         self.assertNotIn("X-Api-App-Key", headers)
         self.assertNotIn("X-Api-Access-Key", headers)
+        old = volc_auth_headers(
+            _settings(volc_app_id="123", volc_access_key="token", volc_resource_id="volc.seedasr.sauc.duration"),
+            "req-2",
+        )
+        self.assertEqual(old["X-Api-App-Key"], "123")
+        self.assertEqual(old["X-Api-Access-Key"], "token")
+        self.assertNotIn("X-Api-Key", old)
 
     def test_adapters_use_configured_end_window(self) -> None:
         settings = _settings(asr_end_window_ms=2000)
@@ -156,9 +165,34 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(aliyun["payload"]["parameters"]["max_sentence_silence"], 2000)
         self.assertEqual(volc["request"]["end_window_size"], 2000)
 
+    def test_volc_request_matches_current_docs(self) -> None:
+        body = VolcengineAsrAdapter(
+            _settings(volc_resource_id="volc.seedasr.sauc.duration")
+        )._full_request()
+        self.assertEqual(body["audio"]["format"], "pcm")
+        self.assertEqual(body["audio"]["codec"], "raw")
+        self.assertEqual(body["audio"]["rate"], 16000)
+        self.assertEqual(body["request"]["model_name"], "bigmodel")
+        self.assertTrue(body["request"]["enable_nonstream"])
+        self.assertTrue(body["request"]["enable_ddc"])
+        self.assertEqual(body["request"]["ssd_version"], "200")
+        self.assertEqual(body["request"]["result_type"], "full")
+
     def test_proxy_error_is_explicit(self) -> None:
         text = humanize_cloud_error(OSError("Failed to connect to 127.0.0.1 port 7890"))
         self.assertIn("127.0.0.1", text)
+
+    def test_volc_resource_not_granted_is_explicit(self) -> None:
+        class _Response:
+            body = b'{"error":"[resource_id=volc.seedasr.sauc.duration] requested resource not granted"}'
+
+        exc = Exception("server rejected WebSocket connection: HTTP 403")
+        exc.response = _Response()  # type: ignore[attr-defined]
+        text = humanize_cloud_error(exc)
+        self.assertIn("未开通", text)
+        self.assertIn("volc.seedasr.sauc.duration", text)
+        self.assertIn("开通管理", text)
+        self.assertNotIn("请检查密钥", text)
 
 
 class GatewayTests(unittest.TestCase):

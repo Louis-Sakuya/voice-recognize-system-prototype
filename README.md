@@ -1,69 +1,102 @@
-# 语音交互模块 Demo（Phase 1：流式字幕）
+# 一期流式语音原型
 
-按最新方案只做 Phase 1：浏览器采集麦克风，经 FastAPI WebSocket 转接到阿里云或火山的流式 ASR，页面实时显示中间字幕和定稿。不接 Agent，也不做语音播报和打断。
+开启语音 → 实时字幕 → 停顿后定稿。本仓库不改现有 AI 平台。正式接入时：识别文本写入对话输入框供编辑，**禁止识别完自动进 Agent**。
 
-本机 Xinference、热词后处理和 CosyVoice 不是这条链路。`scripts/` 里的旧启动脚本可以留着，演示页不会调用它们。
+当前 Phase 1 走**云端流式 ASR**（火山引擎或阿里云）。本机只跑 FastAPI + 浏览器，**不需要**本机 Xinference、PyTorch、ffmpeg。浏览器里的 AudioWorklet 直接产出 16 kHz PCM。
 
-## 语音何时算开启
+## Mac 和 Windows 差在哪
 
-页面加载后先请求 `GET /api/v1/voice/health`。
+云端这条主路径两边流程相同，差别只在安装和启动命令：
 
-- `ready` 为真：云端 ASR 的厂商和密钥已配齐，并且服务能连上云端。这时「开启语音」可以点。
-- 用户点击「开启语音」并完成麦克风授权、WebSocket 收到 `ready` 之后，语音才算开启。
-- 再点「关闭语音」会停麦、断流。刷新页面后仍是关闭，不会自动开。
+| 内容 | macOS | Windows |
+|------|--------|---------|
+| 启动脚本 | `scripts/setup-mac.sh`、`scripts/start-api.sh` | `scripts/start-api.ps1` |
+| 虚拟环境 Python | `.venv/bin/python` | `.venv\Scripts\python.exe` |
+| 系统 Python | 自带常是 3.9，必须另装 3.11+ | 不要用本机过旧的 Python |
+| 本机推理栈 | 不需要 | 不需要 |
+| 麦克风 | 浏览器向系统要权限；用 `http://localhost:8000` | 同样必须 localhost 或 HTTPS；远程桌面还需开「远程音频录制」 |
 
-`ready` 只表示可以开，不表示已经开着。缺密钥、`ASR_PROVIDER` 不正确或云端连不上时，按键禁用，并在旁边写明原因。
+这台 Mac 上还缺：Python 3.11+、`uv`、`.venv`、`backend/.env`、演示页的 Vue 静态文件。用下面的 Mac 步骤一次补齐。
 
-## 环境
+旧的 `scripts/*.ps1`（Xinference / 本地 FunASR / CosyVoice）和 `backend/requirements-xinf.txt` 是上一阶段本机推理残留，**当前 `app.main` 已不再挂载那些路由**。不要在 Mac 上按旧 README 去装 Visual C++、钉 NumPy 2.1.3 或拉 15GB 模型。
 
-- Python 3.11+（`uv` 会按 `pyproject.toml` 选用或下载）
-- 包管理：`uv`（`uv --version` 能跑即可）
-- 虚拟环境：仓库根目录 `.venv`（`uv sync` 创建）
-- 依赖：`pyproject.toml` / `uv.lock`（`backend/requirements.txt` 仅作对照）
-- 浏览器必须用 `http://localhost:8000` 或 HTTPS，否则没有麦克风权限
+## Mac 安装
 
-首次在仓库根目录执行：
+1. 安装 [uv](https://docs.astral.sh/uv/)（会同时管理 Python 3.12，不必先装 Homebrew）：
 
-```powershell
-uv sync
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-或跑 `scripts/setup.ps1`（内部也是 `uv sync`）。若还没有 `backend/.env`，脚本会从 `backend/.env.example` 复制一份。
+新开一个终端，或把 `~/.local/bin` 加进 `PATH`。
 
-复制 `backend/.env.example` 为 `backend/.env` 后填写密钥。
+2. 在仓库根目录执行：
 
-| 变量 | 作用 |
-|------|------|
-| `ASR_PROVIDER` | `aliyun` 或 `volcengine`，改完重启 FastAPI |
-| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key |
-| `ALIYUN_WORKSPACE_ID` | 阿里云百炼业务空间 ID，用于 `wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com` |
-| `ALIYUN_ASR_MODEL` | 默认 `paraformer-realtime-v2` |
-| `VOLC_API_KEY` | 火山引擎新版豆包语音控制台的 API Key |
-| `VOLC_RESOURCE_ID` | 与已开通能力一致，1.0 小时版为 `volc.bigasr.sauc.duration`，2.0 小时版为 `volc.seedasr.sauc.duration` |
-| `ASR_END_WINDOW_MS` | 静音多久后定稿，毫秒。默认 `2000`，范围 500–6000 |
+```bash
+chmod +x scripts/setup-mac.sh scripts/start-api.sh
+./scripts/setup-mac.sh
+```
 
-两家都实现了 Adapter。同一页面只换 `ASR_PROVIDER` 并重启，按键和字幕协议不变。
+这会安装 Python 3.12、同步 `pyproject.toml` 依赖，并在没有 `backend/.env` 时从示例复制一份。脚本默认走 npmmirror / 清华 PyPI，避免直连 GitHub 过慢。
 
-如果本机把代理指到没有在听的 `127.0.0.1`，健康检查会失败，按键保持禁用。跑 FastAPI 的进程需要能直接访问阿里云和火山。
+3. 编辑 `backend/.env`，选一个云端厂商并填密钥：
+
+```bash
+ASR_PROVIDER=volcengine
+VOLC_API_KEY=你的密钥
+```
+
+或：
+
+```bash
+ASR_PROVIDER=aliyun
+DASHSCOPE_API_KEY=你的密钥
+ALIYUN_WORKSPACE_ID=你的业务空间
+```
 
 ## 启动
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-api.ps1
+```bash
+./scripts/start-api.sh
 ```
 
-没有 `.venv` 时，`start-api.ps1` 会先跑一遍 `setup.ps1`。也可以手动启动：
+浏览器打开 http://localhost:8000 ，点「开启语音」。必须用 localhost 或 HTTPS，否则浏览器不给麦克风。
 
-```powershell
+手动启动等价于：
+
+```bash
 cd backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-
-打开 http://localhost:8000 。默认不要麦克风。点「开启语音」后说话，当前句会刷新，停顿后出现在「已定稿」。
 
 ## 接口
 
-- `GET /api/v1/voice/health`：`ready`、`provider`、`model`、`reason`。不返回密钥。
-- `WS /api/v1/voice/stream`：客户端先发 `{"type":"start"}`，再发 16 kHz、16-bit、单声道 PCM 二进制帧（约 200 ms 一包），结束发 `{"type":"stop"}`。服务端回 `ready`、`partial`、`final`、`error`。
+- `GET /health`：进程存活
+- `GET /api/v1/voice/health`：云端凭证是否齐备、短连是否通
+- `WS /api/v1/voice/stream`：浏览器 PCM 上行，中间结果 / 定稿下行
 
-可复用组件是 `frontend/src/components/VoiceInput.vue`，行为与演示页相同：开启/关闭按键、partial / final。演示页本身不经过 Node 构建。
+前端可复用：`frontend/src/components/VoiceInput.vue`（后续接入平台用）。演示页是本地 Vue 单页，不需要再装 Node。
+
+## 环境变量
+
+复制 `backend/.env.example` 为 `backend/.env`。
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `ASR_PROVIDER` | 是 | `volcengine` 或 `aliyun` |
+| `VOLC_API_KEY` | 火山必填 | 新版豆包语音控制台的 API Key（[文档 6561/1354869](https://docs.volcengine.com/docs/6561/1354869)） |
+| `VOLC_RESOURCE_ID` | 否 | 默认 `volc.seedasr.sauc.duration`（2.0 小时版）。须在控制台开通对应能力，否则握手 403 |
+| `VOLC_WS_URL` | 否 | 默认优化双向流 `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async` |
+| `DASHSCOPE_API_KEY` | 阿里必填 | DashScope API Key |
+| `ALIYUN_WORKSPACE_ID` | 阿里必填 | 百炼业务空间 |
+| `ALIYUN_ASR_MODEL` | 否 | 默认 `paraformer-realtime-v2` |
+| `ASR_END_WINDOW_MS` | 否 | 停顿定稿窗口，默认 2000 |
+| `APP_HOST` / `APP_PORT` | 否 | 默认 `127.0.0.1:8000` |
+
+## Windows 启动（对照）
+
+依赖同样用仓库根目录 `uv sync`。然后：
+
+```powershell
+.\scripts\start-api.ps1
+```

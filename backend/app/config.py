@@ -18,6 +18,9 @@ load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
 ALIYUN_PROVIDER = "aliyun"
 VOLC_PROVIDER = "volcengine"
 VOICE_PROVIDERS = {ALIYUN_PROVIDER, VOLC_PROVIDER}
+# 豆包流式识别 2.0 小时版。文档：https://docs.volcengine.com/docs/6561/1354869
+VOLC_RESOURCE_ASR2_DURATION = "volc.seedasr.sauc.duration"
+VOLC_WS_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
 
 
 def _env(name: str, default: str = "") -> str:
@@ -50,7 +53,10 @@ class Settings:
     aliyun_workspace_id: str
     aliyun_asr_model: str
     volc_api_key: str
+    volc_app_id: str
+    volc_access_key: str
     volc_resource_id: str
+    volc_ws_url_override: str
     asr_end_window_ms: int
     app_host: str
     app_port: int
@@ -88,7 +94,7 @@ class Settings:
 
     @property
     def volc_ws_url(self) -> str:
-        return "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+        return self.volc_ws_url_override or VOLC_WS_URL_DEFAULT
 
     def voice_report(self) -> dict[str, object]:
         return describe_voice(self)
@@ -121,17 +127,22 @@ def describe_voice(settings: Settings) -> dict[str, object]:
         return {"ready": True, "provider": provider, "model": model, "reason": ""}
 
     model = "bigmodel"
-    missing = []
-    if not settings.volc_api_key:
-        missing.append("VOLC_API_KEY")
-    if missing:
+    has_new = bool(settings.volc_api_key)
+    has_old = bool(settings.volc_app_id and settings.volc_access_key)
+    if not has_new and not has_old:
         return {
             "ready": False,
             "provider": provider,
             "model": model,
-            "reason": "缺少 " + "、".join(missing),
+            "reason": "缺少 VOLC_API_KEY，或同时填写旧控制台的 VOLC_APP_ID 与 VOLC_ACCESS_KEY",
         }
-    return {"ready": True, "provider": provider, "model": model, "reason": ""}
+    return {
+        "ready": True,
+        "provider": provider,
+        "model": model,
+        "resource_id": settings.volc_resource_id or VOLC_RESOURCE_ASR2_DURATION,
+        "reason": "",
+    }
 
 
 def get_settings() -> Settings:
@@ -141,7 +152,10 @@ def get_settings() -> Settings:
         aliyun_workspace_id=_env("ALIYUN_WORKSPACE_ID"),
         aliyun_asr_model=_env("ALIYUN_ASR_MODEL", "paraformer-realtime-v2"),
         volc_api_key=_env("VOLC_API_KEY"),
-        volc_resource_id=_env("VOLC_RESOURCE_ID", "volc.bigasr.sauc.duration"),
+        volc_app_id=_env("VOLC_APP_ID"),
+        volc_access_key=_env("VOLC_ACCESS_KEY"),
+        volc_resource_id=_env("VOLC_RESOURCE_ID", VOLC_RESOURCE_ASR2_DURATION),
+        volc_ws_url_override=_env("VOLC_WS_URL"),
         asr_end_window_ms=min(6000, max(500, _env_int("ASR_END_WINDOW_MS", 2000))),
         app_host=_env("APP_HOST", "127.0.0.1"),
         app_port=_env_int("APP_PORT", 8000),
